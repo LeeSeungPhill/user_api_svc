@@ -1,41 +1,99 @@
 from sqlalchemy.orm import Session
+from . import models
 from datetime import datetime, timezone
-from . import models, schemas, auth
+from typing import Optional
 
-def create_user(db: Session, user: schemas.StockAccountCreate):
-    hashed_pw = auth.hash_password(user.login_pass)
-    db_user = models.StockAccount(
-        acct_no=user.acct_no,
-        nick_name=user.nick_name,
-        tel_no=user.tel_no,
+def get_account(db: Session, acct_no: int):
+    return db.query(models.StockAccount).filter(models.StockAccount.acct_no == acct_no).first()
+
+def create_account(db: Session, acct_no: int, nick_name: str, tel_no: str, hashed_pw: str):
+    acc = models.StockAccount(
+        acct_no=acct_no,
+        nick_name=nick_name,
         access_token="",
         token_publ_date="",
         app_key="",
         app_secret="",
+        tel_no=tel_no,
         last_chg_date=datetime.now(timezone.utc),
-        login_pass=hashed_pw,
+        login_pw=hashed_pw,
+        failed_attempts=0,
+        locked_until=None
     )
-    db.add(db_user)
+    db.add(acc)
     db.commit()
-    db.refresh(db_user)
-    return db_user
+    db.refresh(acc)
+    return acc
 
-def authenticate_user(db: Session, acct_no: int, password: str):
-    user = db.query(models.StockAccount).filter(models.StockAccount.acct_no == acct_no).first()
-    if not user or not auth.verify_password(password, user.login_pass):
+def set_login_tokens(db: Session, acct_no: int, access_token: str, refresh_token: str):
+    acc = get_account(db, acct_no)
+    if not acc:
         return None
-    return user
+    acc.login_access_token = access_token
+    acc.login_refresh_token = refresh_token
+    acc.last_chg_date = datetime.now(timezone.utc)
+    acc.failed_attempts = 0
+    acc.locked_until = None
+    db.commit()
+    db.refresh(acc)
+    return acc
 
-def get_user_by_acct_no(db: Session, acct_no: int):
-    return db.query(models.StockAccount).filter(models.StockAccount.acct_no == acct_no).first()
+def clear_login_tokens(db: Session, acct_no: int):
+    acc = get_account(db, acct_no)
+    if not acc:
+        return None
+    acc.login_access_token = None
+    acc.login_refresh_token = None
+    db.commit()
+    db.refresh(acc)
+    return acc
 
-def update_login_access_token(db: Session, acct_no: int, token: str):
-    """로그인 성공 시 login_access_token 컬럼 업데이트"""
-    user = db.query(models.StockAccount).filter(models.StockAccount.acct_no == acct_no).first()
-    if user:
-        user.login_access_token = token
-        user.last_chg_date = datetime.utcnow()
-        db.commit()
-        db.refresh(user)
-        return user
-    return None
+def increment_failed_attempt(db: Session, acct_no: int):
+    acc = get_account(db, acct_no)
+    if not acc:
+        return None
+    acc.failed_attempts = (acc.failed_attempts or 0) + 1
+    db.commit()
+    db.refresh(acc)
+    return acc
+
+def reset_failed_attempts(db: Session, acct_no: int):
+    acc = get_account(db, acct_no)
+    if not acc:
+        return None
+    acc.failed_attempts = 0
+    acc.locked_until = None
+    db.commit()
+    db.refresh(acc)
+    return acc
+
+def lock_account_until(db: Session, acct_no: int, until_dt):
+    acc = get_account(db, acct_no)
+    if not acc:
+        return None
+    acc.locked_until = until_dt
+    db.commit()
+    db.refresh(acc)
+    return acc
+
+def log_login_attempt(db: Session, acct_no: Optional[int], ip: Optional[str], success: bool, reason: Optional[str]=None):
+    entry = models.LoginAttempt(acct_no=acct_no, ip=ip, success=success, reason=reason)
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+def update_profile(db: Session, acct_no: int, nick_name: Optional[str]=None, tel_no: Optional[str]=None, hashed_pw: Optional[str]=None):
+    acc = get_account(db, acct_no)
+    if not acc:
+        return None
+    if nick_name is not None:
+        acc.nick_name = nick_name
+    if tel_no is not None:
+        acc.tel_no = tel_no
+    if hashed_pw is not None:
+        acc.login_pw = hashed_pw
+    acc.last_chg_date = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(acc)
+    return acc
