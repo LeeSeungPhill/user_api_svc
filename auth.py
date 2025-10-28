@@ -1,13 +1,12 @@
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from . import config, database, crud, models
+from . import config, crud
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")  # token URL not used directly in our login route but required by FastAPI
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 def hash_password(pw: str):
     return pwd_context.hash(pw)
@@ -66,28 +65,6 @@ def attempt_login(db: Session, acct_no: int, password: str, ip: str | None = Non
     # 발급할 토큰
     access = create_access_token(subject=str(acct_no))
     refresh = create_refresh_token(subject=str(acct_no))
-    # DB에 저장
-    crud.set_login_tokens(db, acct_no, access, refresh)
+    
     return {"access_token": access, "refresh_token": refresh}, None
 
-# 의존성: 보호된 endpoint에서 현재 사용자 가져오기
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(database.SessionLocal)):
-    payload = decode_token(token)
-    if not payload:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-    sub = payload.get("sub")
-    if not sub:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-    acct_no = int(sub)
-    acc = crud.get_account(db, acct_no)
-    if not acc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    # 선택적 검증: 발급된 access token과 비교하여 토큰 탈취 방지 (권장)
-    if not acc.login_access_token or acc.login_access_token != token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token revoked or mismatched")
-    # 계정 잠금 확인
-    if acc.locked_until:
-        now = datetime.now(timezone.utc)
-        if acc.locked_until > now:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account locked")
-    return acc

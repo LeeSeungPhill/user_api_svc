@@ -16,8 +16,6 @@ class StockAccount(Base):
     bot_token1 = Column(String(400), nullable=True)
     bot_token2 = Column(String(400), nullable=True)
     login_pw = Column(String(200), nullable=True)
-    login_access_token = Column(String(400), nullable=True)
-    login_refresh_token = Column(String(400), nullable=True)
     failed_attempts = Column(Integer, nullable=False, default=0)
     locked_until = Column(TIMESTAMP(timezone=True), nullable=True)
 
