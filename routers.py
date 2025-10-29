@@ -53,7 +53,6 @@ def refresh_token(req: schemas.RefreshRequest, db: Session = Depends(database.ge
 @router.get("/me")
 def read_users_me(request: Request, db: Session = Depends(database.get_db), token: str = Depends(auth.oauth2_scheme)):
     payload = auth.decode_token(token)
-    print("디코딩된 payload 1 : ", payload)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -81,7 +80,6 @@ def read_users_me(request: Request, db: Session = Depends(database.get_db), toke
 @router.put("/me", response_model=schemas.ProfileOut)
 def update_my_profile(payload_update: schemas.ProfileUpdate, token: str = Depends(auth.oauth2_scheme), db: Session = Depends(database.get_db)):
     payload = auth.decode_token(token)
-    print("디코딩된 payload 3 : ", payload)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -103,7 +101,6 @@ def update_my_profile(payload_update: schemas.ProfileUpdate, token: str = Depend
 @router.get("/userlist")
 def list_users(token: str = Depends(auth.oauth2_scheme), db: Session = Depends(database.get_db)):
     payload = auth.decode_token(token)
-    print("디코딩된 payload 2 :", payload)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
 
