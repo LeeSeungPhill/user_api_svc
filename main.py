@@ -1,8 +1,8 @@
 from fastapi import FastAPI
-from .database import engine, Base
-from . import models
+from user_api_svc.database import engine, Base
+from user_api_svc import models
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import router as api_router
+from user_api_svc.routers import router as api_router
 
 # create tables if not exist
 models.Base.metadata.create_all(bind=engine)
